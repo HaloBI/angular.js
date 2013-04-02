@@ -242,7 +242,7 @@ var DATE_FORMATS = {
      m: dateGetter('Minutes', 1),
     ss: dateGetter('Seconds', 2),
      s: dateGetter('Seconds', 1),
-     // while ISO 8601 requires fractions to be prefixed with `.` or `,` 
+     // while ISO 8601 requires fractions to be prefixed with `.` or `,`
      // we can be just safely rely on using `sss` since we currently don't support single or two digit fractions
    sss: dateGetter('Milliseconds', 3),
   EEEE: dateStrGetter('Day'),
@@ -354,8 +354,9 @@ function dateFilter($locale) {
         tzHour = int(match[9] + match[10]);
         tzMin = int(match[9] + match[11]);
       }
+      var ms = Math.round(parseFloat('0.' + match[7]) * 1000);
       dateSetter.call(date, int(match[1]), int(match[2]) - 1, int(match[3]));
-      timeSetter.call(date, int(match[4]||0) - tzHour, int(match[5]||0) - tzMin, int(match[6]||0), int(match[7]||0));
+      timeSetter.call(date, int(match[4]||0) - tzHour, int(match[5]||0) - tzMin, int(match[6]||0), ms);
       return date;
     }
     return string;

@@ -343,9 +343,9 @@ describe('filters', function() {
     });
 
     it('should support different degrees of subsecond precision', function () {
-      var format = 'yyyy-MM-dd';
+      var format = 'yyyy-MM-dd ss';
 
-      var expected_20030910 = expected_date(new Date(Date.UTC(2003, 9-1, 10, 13, 2, 3)));
+      var expected_20030910 = expected_date_time(new Date(Date.UTC(2003, 9-1, 10, 13, 2, 3)));
 
       expect(date('2003-09-10T13:02:03.12345678Z', format)).toEqual(expected_20030910);
       expect(date('2003-09-10T13:02:03.1234567Z', format)).toEqual(expected_20030910);

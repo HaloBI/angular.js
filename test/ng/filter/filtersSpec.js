@@ -184,6 +184,16 @@ describe('filters', function() {
       date = $filter('date');
     }));
 
+    // Convert expected dates to local time zone so test works when run in any locale
+    var expected_date = function(d) {
+      return d.getFullYear() + '-0' + (d.getMonth() + 1) + '-' + d.getDate();
+    };
+
+    // Convert expected date/times to local time zone so test works when run in any locale
+    var expected_date_time = function(d) {
+      return expected_date(d) + ' 0' + d.getSeconds();
+    };
+
     it('should ignore falsy inputs', function() {
       expect(date(null)).toBeNull();
       expect(date('')).toEqual('');
@@ -296,25 +306,27 @@ describe('filters', function() {
       expect(date(morning, 'yy/xxx')).toEqual('10/xxx');
     });
 
-
     it('should support various iso8061 date strings with timezone as input', function() {
       var format = 'yyyy-MM-dd ss';
 
+      var expected_20030910_130203 = expected_date_time(new Date(Date.UTC(2003, 9-1, 10, 13, 2, 3)));
+      var expected_20030910_130200 = expected_date_time(new Date(Date.UTC(2003, 9-1, 10, 13, 2, 0)));
+
       //full ISO8061
-      expect(date('2003-09-10T13:02:03.000Z', format)).toEqual('2003-09-10 03');
+      expect(date('2003-09-10T13:02:03.000Z', format)).toEqual(expected_20030910_130203);
 
-      expect(date('2003-09-10T13:02:03.000+00:00', format)).toEqual('2003-09-10 03');
+      expect(date('2003-09-10T13:02:03.000+00:00', format)).toEqual(expected_20030910_130203);
 
-      expect(date('20030910T033203-0930', format)).toEqual('2003-09-10 03');
+      expect(date('20030910T033203-0930', format)).toEqual(expected_20030910_130203);
 
       //no millis
-      expect(date('2003-09-10T13:02:03Z', format)).toEqual('2003-09-10 03');
+      expect(date('2003-09-10T13:02:03Z', format)).toEqual(expected_20030910_130203);
 
       //no seconds
-      expect(date('2003-09-10T13:02Z', format)).toEqual('2003-09-10 00');
+      expect(date('2003-09-10T13:02Z', format)).toEqual(expected_20030910_130200);
 
       //no minutes
-      expect(date('2003-09-10T13Z', format)).toEqual('2003-09-10 00');
+      expect(date('2003-09-10T13Z', format)).toEqual(expected_20030910_130200);
     });
 
 
@@ -333,14 +345,16 @@ describe('filters', function() {
     it('should support different degrees of subsecond precision', function () {
       var format = 'yyyy-MM-dd';
 
-      expect(date('2003-09-10T13:02:03.12345678Z', format)).toEqual('2003-09-10');
-      expect(date('2003-09-10T13:02:03.1234567Z', format)).toEqual('2003-09-10');
-      expect(date('2003-09-10T13:02:03.123456Z', format)).toEqual('2003-09-10');
-      expect(date('2003-09-10T13:02:03.12345Z', format)).toEqual('2003-09-10');
-      expect(date('2003-09-10T13:02:03.1234Z', format)).toEqual('2003-09-10');
-      expect(date('2003-09-10T13:02:03.123Z', format)).toEqual('2003-09-10');
-      expect(date('2003-09-10T13:02:03.12Z', format)).toEqual('2003-09-10');
-      expect(date('2003-09-10T13:02:03.1Z', format)).toEqual('2003-09-10');
+      var expected_20030910 = expected_date(new Date(Date.UTC(2003, 9-1, 10, 13, 2, 3)));
+
+      expect(date('2003-09-10T13:02:03.12345678Z', format)).toEqual(expected_20030910);
+      expect(date('2003-09-10T13:02:03.1234567Z', format)).toEqual(expected_20030910);
+      expect(date('2003-09-10T13:02:03.123456Z', format)).toEqual(expected_20030910);
+      expect(date('2003-09-10T13:02:03.12345Z', format)).toEqual(expected_20030910);
+      expect(date('2003-09-10T13:02:03.1234Z', format)).toEqual(expected_20030910);
+      expect(date('2003-09-10T13:02:03.123Z', format)).toEqual(expected_20030910);
+      expect(date('2003-09-10T13:02:03.12Z', format)).toEqual(expected_20030910);
+      expect(date('2003-09-10T13:02:03.1Z', format)).toEqual(expected_20030910);
     });
   });
 });

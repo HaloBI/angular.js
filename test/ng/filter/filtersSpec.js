@@ -314,7 +314,7 @@ describe('filters', function() {
       expect(date('20030910T030204', format)).toEqual('2003-09-10 03-02-04');
 
       //no time
-      expect(date('2003-09-10', format)).toEqual('2003-09 00');
+      expect(date('2003-09-10', format)).toEqual('2003-09-10 00-00-00');
     });
 
     it('should support different degrees of subsecond precision', function () {

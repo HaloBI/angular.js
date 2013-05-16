@@ -2,12 +2,14 @@
  * All parsing/transformation code goes here. All code here should be sync to ease testing.
  */
 
-var Showdown = require('../../lib/showdown').Showdown;
+var Showdown = require('showdown');
 var DOM = require('./dom.js').DOM;
 var htmlEscape = require('./dom.js').htmlEscape;
 var Example = require('./example.js').Example;
 var NEW_LINE = /\n\r?/;
 var globalID = 0;
+var fs = require('fs');
+var fspath = require('path');
 
 exports.trim = trim;
 exports.metadata = metadata;
@@ -103,7 +105,7 @@ Doc.prototype = {
       IS_URL = /^(https?:\/\/|ftps?:\/\/|mailto:|\.|\/)/,
       IS_ANGULAR = /^(api\/)?(angular|ng|AUTO)\./,
       IS_HASH = /^#/,
-      parts = trim(text).split(/(<pre>[\s\S]*?<\/pre>|<doc:example(\S*).*?>[\s\S]*?<\/doc:example>|<example[^>]*>[\s\S]*?<\/example>)/),
+      parts = trim(text).split(/(<pre.*?>[\s\S]*?<\/pre>|<doc:example(\S*).*?>[\s\S]*?<\/doc:example>|<example[^>]*>[\s\S]*?<\/example>)/),
       seq = 0,
       placeholderMap = {};
 
@@ -113,17 +115,57 @@ Doc.prototype = {
       return id;
     }
 
+    function extractInlineDocCode(text, tag) {
+      if(tag == 'all') {
+        //use a greedy operator to match the last </docs> tag
+        regex = /\/\/<docs.*?>([.\s\S]+)\/\/<\/docs>/im;
+      }
+      else {
+        //use a non-greedy operator to match the next </docs> tag
+        regex = new RegExp("\/\/<docs\\s*tag=\"" + tag + "\".*?>([.\\s\\S]+?)\/\/<\/docs>","im");
+      }
+      var matches = regex.exec(text.toString());
+      return matches && matches.length > 1 ? matches[1] : "";
+    }
+
     parts.forEach(function(text, i) {
       parts[i] = (text || '').
-        replace(/<example(?:\s+module="([^"]*)")?(?:\s+deps="([^"]*)")?>([\s\S]*?)<\/example>/gmi, function(_, module, deps, content) {
+        replace(/<example(?:\s+module="([^"]*)")?(?:\s+deps="([^"]*)")?(\s+animations="true")?>([\s\S]*?)<\/example>/gmi,
+          function(_, module, deps, animations, content) {
+
           var example = new Example(self.scenarios);
+          if(animations) {
+            example.enableAnimations();
+          }
 
           example.setModule(module);
           example.addDeps(deps);
           content.replace(/<file\s+name="([^"]*)"\s*>([\s\S]*?)<\/file>/gmi, function(_, name, content) {
             example.addSource(name, content);
           });
+          content.replace(/<file\s+src="([^"]+)"(?:\s+tag="([^"]+)")?(?:\s+name="([^"]+)")?\s*\/?>/gmi, function(_, file, tag, name) {
+            if(fspath.existsSync(file)) {
+              var content = fs.readFileSync(file, 'utf8');
+              if(content && content.length > 0) {
+                if(tag && tag.length > 0) {
+                  content = extractInlineDocCode(content, tag);
+                }
+                name = name && name.length > 0 ? name : fspath.basename(file);
+                example.addSource(name, content);
+              }
+            }
+            return '';
+          })
           return placeholder(example.toHtml());
+        }).
+        replace(/(?:\*\s+)?<file.+?src="([^"]+)"(?:\s+tag="([^"]+)")?\s*\/?>/i, function(_, file, tag) {
+          if(fspath.existsSync(file)) {
+            var content = fs.readFileSync(file, 'utf8');
+            if(tag && tag.length > 0) {
+              content = extractInlineDocCode(content, tag);
+            }
+            return content;
+          }
         }).
         replace(/^<doc:example(\s+[^>]*)?>([\s\S]*)<\/doc:example>/mi, function(_, attrs, content) {
           var html, script, scenario,
@@ -149,9 +191,9 @@ Doc.prototype = {
 
           return placeholder(example.toHtml());
         }).
-        replace(/^<pre>([\s\S]*?)<\/pre>/mi, function(_, content){
+        replace(/^<pre(.*?)>([\s\S]*?)<\/pre>/mi, function(_, attrs, content){
           return placeholder(
-            '<pre class="prettyprint linenums">' +
+            '<pre'+attrs+' class="prettyprint linenums">' +
               content.replace(/</g, '&lt;').replace(/>/g, '&gt;') +
               '</pre>');
         }).
@@ -174,7 +216,7 @@ Doc.prototype = {
         });
     });
     text = parts.join('');
-    text = new Showdown.converter().makeHtml(text);
+    text = new Showdown.converter({ extensions : ['table'] }).makeHtml(text);
     text = text.replace(/(?:<p>)?(REPLACEME\d+)(?:<\/p>)?/g, function(_, id) {
       return placeholderMap[id];
     });
@@ -306,38 +348,89 @@ Doc.prototype = {
 
   },
 
+  prepare_type_hint_class_name : function(type) {
+    var typeClass = type.toLowerCase().match(/^[-\w]+/) || [];
+    typeClass = typeClass[0] ? typeClass[0] : 'object';
+    return 'label type-hint type-hint-' + typeClass;
+  },
+
   html_usage_parameters: function(dom) {
-    dom.h('Parameters', this.param, function(param){
-      dom.tag('code', function() {
-        dom.text(param.name);
-        if (param.optional) {
-          dom.tag('i', function() {
-            dom.text('(optional');
-            if(param['default']) {
-              dom.text('=' + param['default']);
-            }
-            dom.text(')');
-          });
+    var self = this;
+    var params = this.param ? this.param : []; 
+    if(params.length > 0) {
+      dom.html('<h2 id="parameters">Parameters</h2>');
+      dom.html('<table class="variables-matrix table table-bordered table-striped">');
+      dom.html('<thead>');
+      dom.html('<tr>');
+      dom.html('<th>Param</th>');
+      dom.html('<th>Type</th>');
+      dom.html('<th>Details</th>');
+      dom.html('</tr>');
+      dom.html('</thead>');
+      dom.html('<tbody>');
+      for(var i=0;i<params.length;i++) {
+        param = params[i];
+        var name = param.name;
+        var types = param.type;
+        if(types[0]=='(') {
+          types = types.substr(1);
         }
-        dom.text(' – {');
-        dom.text(param.type);
-        if (param.optional) {
-          dom.text('=');
+
+        var limit = types.length - 1;
+        if(types.charAt(limit) == ')' && types.charAt(limit-1) != '(') {
+          types = types.substr(0,limit);
         }
-        dom.text('} – ');
+        types = types.split(/\|(?![\(\)\w\|\s]+>)/);
+        var description = param.description;
+        if (param.optional) {
+          name += ' <div><em>(optional)</em></div>';
+        }
+        dom.html('<tr>');
+        dom.html('<td>' + name + '</td>');
+        dom.html('<td>');
+        for(var j=0;j<types.length;j++) {
+          var type = types[j];
+          dom.html('<a href="" class="' + self.prepare_type_hint_class_name(type) + '">');
+          dom.text(type);
+          dom.html('</a>');
+        }
+        dom.html('</td>');
+        dom.html('<td>' + description + '</td>');
+        dom.html('</tr>');
+      };
+      dom.html('</tbody>');
+      dom.html('</table>');
+    }
+    if(this.animations) {
+      dom.h('Animations', this.animations, function(animations){
+        dom.html('<ul>');
+        var animations = animations.split("\n");
+        animations.forEach(function(ani) {
+          dom.html('<li>');
+          dom.text(ani);
+          dom.html('</li>');
+        });
+        dom.html('</ul>');
       });
-      dom.html(param.description);
-    });
+    }
   },
 
   html_usage_returns: function(dom) {
     var self = this;
     if (self.returns) {
-      dom.h('Returns', function() {
-        dom.tag('code', '{' + self.returns.type + '}');
-        dom.text('– ');
-        dom.html(self.returns.description);
-      });
+      dom.html('<h2 id="returns">Returns</h2>');
+      dom.html('<table class="variables-matrix">');
+      dom.html('<tr>');
+      dom.html('<td>');
+      dom.html('<a href="" class="' + self.prepare_type_hint_class_name(self.returns.type) + '">');
+      dom.text(self.returns.type);
+      dom.html('</a>');
+      dom.html('</td>');
+      dom.html('<td>');
+      dom.html(self.returns.description);
+      dom.html('</td>');
+      dom.html('</tr>');
+      dom.html('</table>');
     }
   },
 
@@ -388,9 +481,11 @@ Doc.prototype = {
       var restrict = self.restrict || 'AC';
 
       if (restrict.match(/E/)) {
-        dom.text('This directive can be used as custom element, but we aware of ');
+        dom.html('<p>');
+        dom.text('This directive can be used as custom element, but be aware of ');
         dom.tag('a', {href:'guide/ie'}, 'IE restrictions');
         dom.text('.');
+        dom.html('</p>');
       }
 
       if (self.usage) {
@@ -432,6 +527,48 @@ Doc.prototype = {
             dom.text('">\n   ...\n');
             dom.text('</' + element + '>');
           });
+        }
+        if(self.animations) {
+          var animations = [], matches = self.animations.split("\n");
+          matches.forEach(function(ani) {
+            var name = ani.match(/^\s*(.+?)\s*-/)[1];
+            animations.push(name);
+          });
+
+          dom.html('with <span id="animations">animations</span>');
+          var comment;
+          if(animations.length == 1) {
+            comment = 'The ' + animations[0] + ' animation is supported';
+          }
+          else {
+            var rhs = animations[animations.length-1];
+            var lhs = '';
+            for(var i=0;i<animations.length-1;i++) {
+              if(i>0) {
+                lhs += ', ';
+              }
+              lhs += animations[i];
+            }
+            comment = 'The ' + lhs + ' and ' + rhs + ' animations are supported';
+          }
+          var element = self.element || 'ANY';
+          dom.code(function() {
+            dom.text('//' + comment + "\n");
+            dom.text('<' + element + ' ');
+            dom.text(dashCase(self.shortName));
+            renderParams('\n     ', '="', '"', true);
+            dom.text(' ng-animate="{');
+            animations.forEach(function(ani, index) {
+              if (index) {
+                dom.text(', ');
+              }
+              dom.text(ani + ': \'' + ani + '-animation\'');
+            });
+            dom.text('}">\n   ...\n');
+            dom.text('</' + element + '>');
+          });
+
+          dom.html('<a href="api/ng.$animator#Methods">Click here</a> to learn more about the steps involved in the animation.');
         }
       }
       self.html_usage_directiveInfo(dom);

@@ -309,24 +309,23 @@ describe('filters', function() {
     it('should support various iso8061 date strings with timezone as input', function() {
       var format = 'yyyy-MM-dd ss';
 
-      var expected_20030910_130203 = expected_date_time(new Date(Date.UTC(2003, 9-1, 10, 13, 2, 3)));
-      var expected_20030910_130200 = expected_date_time(new Date(Date.UTC(2003, 9-1, 10, 13, 2, 0)));
+      var localDay = new Date(Date.UTC(2003, 9, 10, 13, 2, 3, 0)).getDate();
 
       //full ISO8061
-      expect(date('2003-09-10T13:02:03.000Z', format)).toEqual(expected_20030910_130203);
+      expect(date('2003-09-10T13:02:03.000Z', format)).toEqual('2003-09-' + localDay + ' 03');
 
-      expect(date('2003-09-10T13:02:03.000+00:00', format)).toEqual(expected_20030910_130203);
+      expect(date('2003-09-10T13:02:03.000+00:00', format)).toEqual('2003-09-' + localDay + ' 03');
 
-      expect(date('20030910T033203-0930', format)).toEqual(expected_20030910_130203);
+      expect(date('20030910T033203-0930', format)).toEqual('2003-09-' + localDay + ' 03');
 
       //no millis
-      expect(date('2003-09-10T13:02:03Z', format)).toEqual(expected_20030910_130203);
+      expect(date('2003-09-10T13:02:03Z', format)).toEqual('2003-09-' + localDay + ' 03');
 
       //no seconds
-      expect(date('2003-09-10T13:02Z', format)).toEqual(expected_20030910_130200);
+      expect(date('2003-09-10T13:02Z', format)).toEqual('2003-09-' + localDay + ' 00');
 
       //no minutes
-      expect(date('2003-09-10T13Z', format)).toEqual(expected_20030910_130200);
+      expect(date('2003-09-10T13Z', format)).toEqual('2003-09-' + localDay + ' 00');
     });
 
 
@@ -345,16 +344,16 @@ describe('filters', function() {
     it('should support different degrees of subsecond precision', function () {
       var format = 'yyyy-MM-dd ss';
 
-      var expected_20030910 = expected_date_time(new Date(Date.UTC(2003, 9-1, 10, 13, 2, 3)));
+      var localDay = new Date(Date.UTC(2003, 9-1, 10, 13, 2, 3, 123)).getDate();
 
-      expect(date('2003-09-10T13:02:03.12345678Z', format)).toEqual(expected_20030910);
-      expect(date('2003-09-10T13:02:03.1234567Z', format)).toEqual(expected_20030910);
-      expect(date('2003-09-10T13:02:03.123456Z', format)).toEqual(expected_20030910);
-      expect(date('2003-09-10T13:02:03.12345Z', format)).toEqual(expected_20030910);
-      expect(date('2003-09-10T13:02:03.1234Z', format)).toEqual(expected_20030910);
-      expect(date('2003-09-10T13:02:03.123Z', format)).toEqual(expected_20030910);
-      expect(date('2003-09-10T13:02:03.12Z', format)).toEqual(expected_20030910);
-      expect(date('2003-09-10T13:02:03.1Z', format)).toEqual(expected_20030910);
+      expect(date('2003-09-10T13:02:03.12345678Z', format)).toEqual('2003-09-' + localDay + ' 03');
+      expect(date('2003-09-10T13:02:03.1234567Z', format)).toEqual('2003-09-' + localDay + ' 03');
+      expect(date('2003-09-10T13:02:03.123456Z', format)).toEqual('2003-09-' + localDay + ' 03');
+      expect(date('2003-09-10T13:02:03.12345Z', format)).toEqual('2003-09-' + localDay + ' 03');
+      expect(date('2003-09-10T13:02:03.1234Z', format)).toEqual('2003-09-' + localDay + ' 03');
+      expect(date('2003-09-10T13:02:03.123Z', format)).toEqual('2003-09-' + localDay + ' 03');
+      expect(date('2003-09-10T13:02:03.12Z', format)).toEqual('2003-09-' + localDay + ' 03');
+      expect(date('2003-09-10T13:02:03.1Z', format)).toEqual('2003-09-' + localDay + ' 03');
     });
   });
 });

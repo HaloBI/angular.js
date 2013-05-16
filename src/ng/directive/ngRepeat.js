@@ -16,6 +16,13 @@
  *   * `$middle` – `{boolean}` – true if the repeated element is between the first and last in the iterator.
  *   * `$last` – `{boolean}` – true if the repeated element is last in the iterator.
  *
+ * Additionally, you can also provide animations via the ngAnimate attribute to animate the **enter**,
+ * **leave** and **move** effects.
+ *
+ * @animations
+ * enter - when a new item is added to the list or when an item is revealed after a filter
+ * leave - when an item is removed from the list or when an item is filtered out
+ * move - when an adjacent item is filtered out causing a reorder or when the item contents are reordered
  *
  * @element ANY
  * @scope
@@ -54,37 +61,99 @@
  * @example
  * This example initializes the scope to a list of names and
  * then uses `ngRepeat` to display every person:
-    <doc:example>
-      <doc:source>
-        <div ng-init="friends = [{name:'John', age:25}, {name:'Mary', age:28}]">
-          I have {{friends.length}} friends. They are:
-          <ul>
-            <li ng-repeat="friend in friends">
-              [{{$index + 1}}] {{friend.name}} who is {{friend.age}} years old.
-            </li>
-          </ul>
-        </div>
-      </doc:source>
-      <doc:scenario>
-         it('should check ng-repeat', function() {
-           var r = using('.doc-example-live').repeater('ul li');
-           expect(r.count()).toBe(2);
-           expect(r.row(0)).toEqual(["1","John","25"]);
-           expect(r.row(1)).toEqual(["2","Mary","28"]);
-         });
-      </doc:scenario>
-    </doc:example>
+  <example animations="true">
+    <file name="index.html">
+      <div ng-init="friends = [
+        {name:'John', age:25, gender:'boy'},
+        {name:'Jessie', age:30, gender:'girl'},
+        {name:'Johanna', age:28, gender:'girl'},
+        {name:'Joy', age:15, gender:'girl'},
+        {name:'Mary', age:28, gender:'girl'},
+        {name:'Peter', age:95, gender:'boy'},
+        {name:'Sebastian', age:50, gender:'boy'},
+        {name:'Erika', age:27, gender:'girl'},
+        {name:'Patrick', age:40, gender:'boy'},
+        {name:'Samantha', age:60, gender:'girl'}
+      ]">
+        I have {{friends.length}} friends. They are:
+        <input type="search" ng-model="q" placeholder="filter friends..." />
+        <ul>
+          <li ng-repeat="friend in friends | filter:q"
+              ng-animate="{enter: 'example-repeat-enter',
+                          leave: 'example-repeat-leave',
+                          move: 'example-repeat-move'}">
+            [{{$index + 1}}] {{friend.name}} who is {{friend.age}} years old.
+          </li>
+        </ul>
+      </div>
+    </file>
+    <file name="animations.css">
+      .example-repeat-enter,
+      .example-repeat-leave,
+      .example-repeat-move {
+        -webkit-transition:all linear 0.5s;
+        -moz-transition:all linear 0.5s;
+        -ms-transition:all linear 0.5s;
+        -o-transition:all linear 0.5s;
+        transition:all linear 0.5s;
+      }
+
+      .example-repeat-enter {
+        line-height:0;
+        opacity:0;
+      }
+      .example-repeat-enter.example-repeat-enter-active {
+        line-height:20px;
+        opacity:1;
+      }
+
+      .example-repeat-leave {
+        opacity:1;
+        line-height:20px;
+      }
+      .example-repeat-leave.example-repeat-leave-active {
+        opacity:0;
+        line-height:0;
+      }
+
+      .example-repeat-move { }
+      .example-repeat-move.example-repeat-move-active { }
+    </file>
+    <file name="scenario.js">
+       it('should render initial data set', function() {
+         var r = using('.doc-example-live').repeater('ul li');
+         expect(r.count()).toBe(10);
+         expect(r.row(0)).toEqual(["1","John","25"]);
+         expect(r.row(1)).toEqual(["2","Jessie","30"]);
+         expect(r.row(9)).toEqual(["10","Samantha","60"]);
+         expect(binding('friends.length')).toBe("10");
+       });
+
+       it('should update repeater when filter predicate changes', function() {
+         var r = using('.doc-example-live').repeater('ul li');
+         expect(r.count()).toBe(10);
+
+         input('q').enter('ma');
+
+         expect(r.count()).toBe(2);
+         expect(r.row(0)).toEqual(["1","Mary","28"]);
+         expect(r.row(1)).toEqual(["2","Samantha","60"]);
+       });
+      </file>
+    </example>
  */
-var ngRepeatDirective = ['$parse', function($parse) {
+var ngRepeatDirective = ['$parse', '$animator', function($parse, $animator) {
+  var NG_REMOVED = '$$NG_REMOVED';
   return {
     transclude: 'element',
     priority: 1000,
     terminal: true,
     compile: function(element, attr, linker) {
       return function($scope, $element, $attr){
+        var animate = $animator($scope, $attr);
         var expression = $attr.ngRepeat;
         var match = expression.match(/^\s*(.+)\s+in\s+(.*?)\s*(\s+track\s+by\s+(.+)\s*)?$/),
-          trackByExp, hashExpFn, trackByIdFn, lhs, rhs, valueIdentifier, keyIdentifier,
+          trackByExp, trackByExpGetter, trackByIdFn, lhs, rhs, valueIdentifier, keyIdentifier,
           hashFnLocals = {$id: hashKey};
 
         if (!match) {
@@ -97,20 +166,20 @@ var ngRepeatDirective = ['$parse', function($parse) {
         trackByExp = match[4];
 
         if (trackByExp) {
-          hashExpFn = $parse(trackByExp);
+          trackByExpGetter = $parse(trackByExp);
           trackByIdFn = function(key, value, index) {
             // assign key, value, and $index to the locals so that they can be used in hash functions
             if (keyIdentifier) hashFnLocals[keyIdentifier] = key;
             hashFnLocals[valueIdentifier] = value;
             hashFnLocals.$index = index;
-            return hashExpFn($scope, hashFnLocals);
+            return trackByExpGetter($scope, hashFnLocals);
           };
         } else {
           trackByIdFn = function(key, value) {
             return hashKey(value);
           }
         }
-        
+
         match = lhs.match(/^(?:([\$\w]+)|\(([\$\w]+)\s*,\s*([\$\w]+)\))$/);
         if (!match) {
           throw Error("'item' in 'item in collection' should be identifier or (key, value) but got '" +
@@ -130,6 +199,7 @@ var ngRepeatDirective = ['$parse', function($parse) {
         $scope.$watchCollection(rhs, function ngRepeatAction(collection){
           var index, length,
               cursor = $element,     // current position of the node
+              nextCursor,
               // Same as lastBlockMap but it has the current state. It will become the
               // lastBlockMap on the next iteration.
               nextBlockMap = {},
@@ -142,7 +212,7 @@ var ngRepeatDirective = ['$parse', function($parse) {
               nextBlockOrder = [];
 
 
-          if (isArray(collection)) {
+          if (isArrayLike(collection)) {
             collectionKeys = collection;
           } else {
             // if object, extract keys, sort them and use to determine order of iteration over obj props
@@ -163,7 +233,8 @@ var ngRepeatDirective = ['$parse', function($parse) {
            key = (collection === collectionKeys) ? index : collectionKeys[index];
            value = collection[key];
            trackById = trackByIdFn(key, value, index);
-           if((block = lastBlockMap[trackById])) {
+           if(lastBlockMap.hasOwnProperty(trackById)) {
+             block = lastBlockMap[trackById]
              delete lastBlockMap[trackById];
              nextBlockMap[trackById] = block;
              nextBlockOrder[index] = block;
@@ -173,10 +244,12 @@ var ngRepeatDirective = ['$parse', function($parse) {
                if (block && block.element) lastBlockMap[block.id] = block;
              });
              // This is a duplicate and we need to throw an error
-             throw new Error('Duplicates in a repeater are not allowed. Repeater: ' + expression);
+             throw new Error('Duplicates in a repeater are not allowed. Repeater: ' + expression +
+                 ' key: ' + trackById);
            } else {
              // new never before seen block
              nextBlockOrder[index] = { id: trackById };
+             nextBlockMap[trackById] = false;
            }
          }
 
@@ -184,7 +257,8 @@ var ngRepeatDirective = ['$parse', function($parse) {
           for (key in lastBlockMap) {
             if (lastBlockMap.hasOwnProperty(key)) {
               block = lastBlockMap[key];
-              block.element.remove();
+              animate.leave(block.element);
+              block.element[0][NG_REMOVED] = true;
               block.scope.$destroy();
             }
           }
@@ -200,12 +274,17 @@ var ngRepeatDirective = ['$parse', function($parse) {
               // associated scope/element
               childScope = block.scope;
 
-              if (block.element == cursor) {
+              nextCursor = cursor[0];
+              do {
+                nextCursor = nextCursor.nextSibling;
+              } while(nextCursor && nextCursor[NG_REMOVED]);
+
+              if (block.element[0] == nextCursor) {
                 // do nothing
                 cursor = block.element;
               } else {
                 // existing item which got moved
-                cursor.after(block.element);
+                animate.move(block.element, null, cursor);
                 cursor = block.element;
               }
             } else {
@@ -221,8 +300,8 @@ var ngRepeatDirective = ['$parse', function($parse) {
             childScope.$middle = !(childScope.$first || childScope.$last);
 
             if (!block.element) {
-              linker(childScope, function(clone){
-                cursor.after(clone);
+              linker(childScope, function(clone) {
+                animate.enter(clone, null, cursor);
                 cursor = clone;
                 block.scope = childScope;
                 block.element = clone;
@@ -236,3 +315,4 @@ var ngRepeatDirective = ['$parse', function($parse) {
     }
   };
 }];
+

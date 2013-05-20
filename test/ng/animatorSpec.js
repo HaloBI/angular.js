@@ -352,6 +352,18 @@ describe("$animator", function() {
       expect(element.hasClass('animation-cancelled')).toBe(true);
     }));
 
+
+    it("should properly animate custom animation events", inject(function($animator, $rootScope) {
+      $animator.enabled(true);
+      animator = $animator($rootScope, {
+        ngAnimate : '{custom: \'setup-memo\'}'
+      });
+
+      element.text('123');
+      animator.animate('custom',element);
+      window.setTimeout.expect(1).process();
+      expect(element.text()).toBe('memento');
+    }));
   });
 
   describe("with CSS3", function() {
@@ -367,6 +379,64 @@ describe("$animator", function() {
         };
       })
     });
+
+    it("should properly animate custom animations for specific animation events",
+      inject(function($animator, $rootScope, $compile, $sniffer) {
+
+      $animator.enabled(true);
+      var element = $compile(html('<div></div>'))($rootScope);
+
+      animator = $animator($rootScope, {
+        ngAnimate : '{custom: \'special\'}'
+      });
+
+      animator.animate('custom',element);
+      if($sniffer.transitions) {
+        expect(element.hasClass('special')).toBe(true);
+        window.setTimeout.expect(1).process();
+        expect(element.hasClass('special-active')).toBe(true);
+      }
+      else {
+        expect(window.setTimeout.queue.length).toBe(0);
+      }
+    }));
+
+    it("should not animate custom animations if not specifically defined",
+      inject(function($animator, $rootScope, $compile) {
+
+      $animator.enabled(true);
+      var element = $compile(html('<div></div>'))($rootScope);
+
+      animator = $animator($rootScope, {
+        ngAnimate : '{custom: \'special\'}'
+      });
+
+      expect(window.setTimeout.queue.length).toBe(0);
+      animator.animate('custom1',element);
+      expect(element.hasClass('special')).toBe(false);
+      expect(window.setTimeout.queue.length).toBe(0);
+    }));
+
+    it("should properly animate custom animations for general animation events",
+      inject(function($animator, $rootScope, $compile, $sniffer) {
+
+      $animator.enabled(true);
+      var element = $compile(html('<div></div>'))($rootScope);
+
+      animator = $animator($rootScope, {
+        ngAnimate : "'special'"
+      });
+
+      animator.animate('custom',element);
+      if($sniffer.transitions) {
+        expect(element.hasClass('special-custom')).toBe(true);
+        window.setTimeout.expect(1).process();
+        expect(element.hasClass('special-custom-active')).toBe(true);
+      }
+      else {
+        expect(window.setTimeout.queue.length).toBe(0);
+      }
+    }));
 
     describe("Animations", function() {
       it("should properly detect and make use of CSS Animations",
@@ -385,6 +455,9 @@ describe("$animator", function() {
         if ($sniffer.animations) {
           window.setTimeout.expect(1).process();
           window.setTimeout.expect(4000).process();
+        }
+        else {
+          expect(window.setTimeout.queue.length).toBe(0);
         }
         expect(element[0].style.display).toBe('');
       }));
@@ -408,6 +481,9 @@ describe("$animator", function() {
           window.setTimeout.expect(1).process();
           window.setTimeout.expect(6000).process();
         }
+        else {
+          expect(window.setTimeout.queue.length).toBe(0);
+        }
         expect(element[0].style.display).toBe('');
       }));
 
@@ -429,6 +505,9 @@ describe("$animator", function() {
         if ($sniffer.animations) {
           window.setTimeout.expect(1).process();
           window.setTimeout.expect(2000).process();
+        }
+        else {
+          expect(window.setTimeout.queue.length).toBe(0);
         }
         expect(element[0].style.display).toBe('');
       }));
@@ -454,6 +533,9 @@ describe("$animator", function() {
           window.setTimeout.expect(1).process();
           window.setTimeout.expect(20000).process();
         }
+        else {
+          expect(window.setTimeout.queue.length).toBe(0);
+        }
         expect(element[0].style.display).toBe('');
       }));
 
@@ -475,8 +557,6 @@ describe("$animator", function() {
 
       it("should finish the previous animation when a new animation is started",
         inject(function($animator, $rootScope, $compile, $sniffer) {
-          if(!$sniffer.animations) return;
-
           var style = 'animation: some_animation 2s linear 0s 1 alternate;' +
                       vendorPrefix + 'animation: some_animation 2s linear 0s 1 alternate;'
 
@@ -486,11 +566,19 @@ describe("$animator", function() {
           });
 
           animator.show(element);
-          window.setTimeout.expect(1).process();
-          expect(element.hasClass('show')).toBe(true);
-          expect(element.hasClass('show-active')).toBe(true);
+          if($sniffer.animations) {
+            window.setTimeout.expect(1).process();
+            expect(element.hasClass('show')).toBe(true);
+            expect(element.hasClass('show-active')).toBe(true);
+          }
+          else { //animation is skipped
+            expect(window.setTimeout.queue.length).toBe(0);
+          }
 
           animator.hide(element);
+          if(!$sniffer.animations) {
+            expect(window.setTimeout.queue.length).toBe(0);
+          }
           expect(element.hasClass('show')).toBe(false);
           expect(element.hasClass('show-active')).toBe(false);
       }));
@@ -520,6 +608,9 @@ describe("$animator", function() {
           window.setTimeout.expect(1).process();
           window.setTimeout.expect(1000).process();
         }
+        else {
+          expect(window.setTimeout.queue.length).toBe(0);
+        }
         expect(element[0].style.display).toBe('');
       }));
 
@@ -535,6 +626,9 @@ describe("$animator", function() {
           if ($sniffer.transitions) {
             window.setTimeout.expect(1).process();
             window.setTimeout.expect(2000).process();
+          }
+          else {
+            expect(window.setTimeout.queue.length).toBe(0);
           }
           expect(element[0].style.display).toBe('');
         }));
@@ -565,17 +659,17 @@ describe("$animator", function() {
           if ($sniffer.transitions) {
             window.setTimeout.expect(1).process();
             window.setTimeout.expect(3000).process();
-          return;
+          }
+          else {
+            expect(window.setTimeout.queue.length).toBe(0);
           }
           expect(element[0].style.display).toBe('');
       }));
 
       it("should finish the previous transition when a new animation is started",
         inject(function($animator, $rootScope, $compile, $sniffer) {
-          if(!$sniffer.animations) return;
-
           var style = 'transition: 1s linear all;' +
-                      vendorPrefix + 'animation: 1s linear all;'
+                      vendorPrefix + 'transition: 1s linear all;'
 
           element = $compile(html('<div style="' + style + '">1</div>'))($rootScope);
           var animator = $animator($rootScope, {
@@ -583,11 +677,19 @@ describe("$animator", function() {
           });
 
           animator.show(element);
-          window.setTimeout.expect(1).process();
-          expect(element.hasClass('show')).toBe(true);
-          expect(element.hasClass('show-active')).toBe(true);
+          if($sniffer.transitions) {
+            window.setTimeout.expect(1).process();
+            expect(element.hasClass('show')).toBe(true);
+            expect(element.hasClass('show-active')).toBe(true);
+          }
+          else { //animation is skipped
+            expect(window.setTimeout.queue.length).toBe(0);
+          }
 
           animator.hide(element);
+          if(!$sniffer.transitions) {
+            expect(window.setTimeout.queue.length).toBe(0);
+          }
           expect(element.hasClass('show')).toBe(false);
           expect(element.hasClass('show-active')).toBe(false);
       }));
